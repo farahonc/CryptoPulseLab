@@ -1,0 +1,148 @@
+import hashlib
+import time
+from typing import List, Dict
+
+class Account:
+    def __init__(self, address, initial_balance=0):
+        self.address = address
+        self.balance = initial_balance
+        self.staked = 0
+
+    def __str__(self):
+        return f"Account(Address: {self.address}, Balance: {self.balance}, Staked: {self.staked})"
+
+class Transaction:
+    def __init__(self, sender, recipient, amount):
+        self.sender = sender
+        self.recipient = recipient
+        self.amount = amount
+        self.timestamp = time.time()
+
+    def calculate_hash(self):
+        transaction_string = f"{self.sender}{self.recipient}{self.amount}{self.timestamp}"
+        return hashlib.sha256(transaction_string.encode()).hexdigest()
+
+    def __str__(self):
+        return f"Transaction({self.sender} -> {self.recipient}, Amount: {self.amount})"
+
+class Block:
+    def __init__(self, index, previous_hash, timestamp, transactions: List[Transaction], nonce=0):
+        self.index = index
+        self.previous_hash = previous_hash
+        self.timestamp = timestamp
+        self.transactions = transactions
+        self.nonce = nonce
+        self.hash = self.calculate_hash()
+
+    def calculate_hash(self):
+        transaction_hashes = ''.join(tx.calculate_hash() for tx in self.transactions)
+        block_string = f"{self.index}{self.previous_hash}{self.timestamp}{transaction_hashes}{self.nonce}"
+        return hashlib.sha256(block_string.encode()).hexdigest()
+
+    def __str__(self):
+        return (f"Block(Index: {self.index}, Previous Hash: {self.previous_hash}, "
+                f"Timestamp: {self.timestamp}, Transactions: {len(self.transactions)}, "
+                f"Nonce: {self.nonce}, Hash: {self.hash})")
+
+class CryptoPulseLab:
+    def __init__(self, initial_supply):
+        self.chain = [self.create_genesis_block()]
+        self.difficulty = 4
+        self.pending_transactions = []
+        self.accounts = {}
+        self.create_account("admin", initial_supply)  # Initial admin account with some balance
+
+    def create_genesis_block(self):
+        return Block(0, "0", time.time(), [])
+
+    def get_latest_block(self):
+        return self.chain[-1]
+
+    def add_block(self, new_block):
+        new_block.previous_hash = self.get_latest_block().hash
+        new_block.hash = new_block.calculate_hash()
+        self.chain.append(new_block)
+
+    def proof_of_stake(self, block):
+        # Simplified PoS: Validate by ensuring a certain amount of stake
+        stake_threshold = 100  # Example threshold
+        if any(self.accounts[tx.sender].staked >= stake_threshold for tx in block.transactions):
+            return True
+        return False
+
+    def is_chain_valid(self):
+        for i in range(1, len(self.chain)):
+            current_block = self.chain[i]
+            previous_block = self.chain[i - 1]
+
+            if current_block.hash != current_block.calculate_hash():
+                return False
+
+            if current_block.previous_hash != previous_block.hash:
+                return False
+
+        return True
+
+    def create_account(self, address, initial_balance=0):
+        if address not in self.accounts:
+            self.accounts[address] = Account(address, initial_balance)
+            print(f"Account {address} created with initial balance of {initial_balance}.")
+        else:
+            print(f"Account {address} already exists.")
+
+    def add_transaction(self, transaction):
+        if self.accounts[transaction.sender].balance < transaction.amount:
+            print(f"Transaction from {transaction.sender} to {transaction.recipient} failed due to insufficient balance.")
+            return False
+        self.pending_transactions.append(transaction)
+        print(f"Transaction added: {transaction}")
+        return True
+
+    def stake_tokens(self, address, amount):
+        if self.accounts[address].balance < amount:
+            print(f"Insufficient balance for staking by {address}.")
+            return False
+        self.accounts[address].balance -= amount
+        self.accounts[address].staked += amount
+        print(f"{amount} tokens staked by {address}.")
+        return True
+
+    def mine_block(self):
+        if not self.pending_transactions:
+            print("No transactions to mine.")
+            return
+
+        new_block = Block(len(self.chain), self.get_latest_block().hash, time.time(), self.pending_transactions)
+        
+        if self.proof_of_stake(new_block):
+            self.add_block(new_block)
+            self.pending_transactions = []
+            print(f"Block mined: {new_block}")
+        else:
+            print("Proof of Stake validation failed.")
+
+# Example Usage
+crypto_pulse_lab = CryptoPulseLab(initial_supply=1000)
+
+# Create accounts
+crypto_pulse_lab.create_account("alice")
+crypto_pulse_lab.create_account("bob")
+
+# Add transactions
+crypto_pulse_lab.add_transaction(Transaction("admin", "alice", 100))
+crypto_pulse_lab.add_transaction(Transaction("alice", "bob", 50))
+
+# Stake tokens
+crypto_pulse_lab.stake_tokens("alice", 200)
+
+# Mine a block
+crypto_pulse_lab.mine_block()
+
+# Print blockchain
+for block in crypto_pulse_lab.chain:
+    print(block)
+    for tx in block.transactions:
+        print(f"  {tx}")
+
+# Check if blockchain is valid
+print("Is blockchain valid?", crypto_pulse_lab.is_chain_valid())
